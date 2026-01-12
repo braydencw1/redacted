@@ -13,11 +13,10 @@ fn main() {
     let clipboard = String::from_utf8_lossy(&output.stdout).to_string();
 
 
-    let _config_dir = ensure_config_dir("redacted");
-    let config = load_config("redacted");
+    let _config_dir = ensure_config_dir("redactd");
+    let config = load_config("redactd");
 
     let redacted = redact_text(&clipboard, &config.rules);
-    // println!("redacted {}", redacted);
     overwrite_clipboard(&redacted);
 }
 
@@ -66,21 +65,15 @@ fn ensure_config_dir(app: &str) -> PathBuf {
 }
 
 fn redact_text(input: &str, rules: &HashMap<String, RuleGroup>) -> String {
-    input.split_whitespace().map(|word| redact_word(word, rules))
-    .collect::<Vec<_>>()
-    .join(" ")
-}
+    let mut out = input.to_string();
 
-fn redact_word<'a>(
-    word: &'a str,
-    rules: &'a HashMap<String, RuleGroup>,
-) -> &'a str {
     for rule in rules.values() {
-        if rule.match_.iter().any(|m| m == word) {
-            return &rule.replace;
+        for m in &rule.match_ {
+            out = out.replace(m, &rule.replace);
         }
     }
-    return word
+
+    return out
 }
 
 fn load_config(app: &str) -> Config {
@@ -94,7 +87,7 @@ fn load_config(app: &str) -> Config {
 
     let path = base.join(app).join("config.toml");
     let data = fs::read_to_string(&path)
-        .expect("missing ~/.config/redacted/config.toml");
+        .expect("missing ~/.config/redactd/config.toml");
 
     toml::from_str(&data).expect("invalid config")
 }

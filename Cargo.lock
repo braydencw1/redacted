@@ -9,14 +9,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
-name = "fun"
-version = "0.1.0"
-dependencies = [
- "serde",
- "toml",
-]
-
-[[package]]
 name = "hashbrown"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -48,6 +40,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc74d9a594b72ae6656596548f56f667211f8a97b3d4c3d467150794690dc40a"
 dependencies = [
  "proc-macro2",
+]
+
+[[package]]
+name = "redactd"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "toml",
 ]
 
 [[package]]
