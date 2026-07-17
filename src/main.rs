@@ -1,42 +1,60 @@
-use std::io::Write;
-use std::process::Stdio;
-use std::{collections::HashMap, process::Command};
 use serde::Deserialize;
 use std::fs;
+use std::io::Write;
 use std::path::PathBuf;
+use std::process::{Command, Stdio, exit};
+
+const DEFAULT_CONFIG: &str = "\
+# redactd rules, applied top to bottom.
+rules:
+  - replace: \"[NAME]\"
+    match:
+      - Alice Example
+      - alice@example.com
+";
 
 fn main() {
+    let config = load_config("redactd");
+    let clipboard = read_clipboard();
+
+    let redacted = redact_text(&clipboard, &config.rules);
+    if redacted != clipboard {
+        overwrite_clipboard(&redacted);
+    }
+}
+
+fn read_clipboard() -> String {
     let output = Command::new("wl-paste")
+        .arg("--no-newline")
         .output()
         .expect("wl-paste not found");
 
-    let clipboard = String::from_utf8_lossy(&output.stdout).to_string();
+    // wl-paste exits nonzero when the clipboard is empty or non-text
+    if !output.status.success() {
+        exit(0);
+    }
 
-
-    let _config_dir = ensure_config_dir("redactd");
-    let config = load_config("redactd");
-
-    let redacted = redact_text(&clipboard, &config.rules);
-    overwrite_clipboard(&redacted);
+    String::from_utf8_lossy(&output.stdout).to_string()
 }
 
 fn overwrite_clipboard(text: &str) {
     let mut child = Command::new("wl-copy")
-    .stdin(Stdio::piped())
-    .spawn()
-    .expect("failed to start wl-copy");
+        .stdin(Stdio::piped())
+        .spawn()
+        .expect("failed to start wl-copy");
 
     child
-    .stdin
-    .as_mut()
-    .unwrap()
-    .write_all(text.as_bytes())
-    .expect("failed to write wl-copy")
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(text.as_bytes())
+        .expect("failed to write to wl-copy");
+
+    child.wait().expect("wl-copy failed");
 }
 
-
 #[derive(Deserialize)]
-struct RuleGroup {
+struct Rule {
     replace: String,
 
     #[serde(rename = "match")]
@@ -45,49 +63,50 @@ struct RuleGroup {
 
 #[derive(Deserialize)]
 struct Config {
-    rules: HashMap<String, RuleGroup>,
+    rules: Vec<Rule>,
 }
 
-fn ensure_config_dir(app: &str) -> PathBuf {
+fn config_path(app: &str) -> PathBuf {
     let base = std::env::var("XDG_CONFIG_HOME")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            let mut p = PathBuf::from(std::env::var("HOME").unwrap());
-            p.push(".config");
-            p
-        });
-        
-        let dir = base.join(app);
+        .unwrap_or_else(|_| PathBuf::from(std::env::var("HOME").unwrap()).join(".config"));
 
-        fs::create_dir_all(&dir)
-            .expect("failed to create config directory");
-        return dir
+    base.join(app).join("config.yaml")
 }
 
-fn redact_text(input: &str, rules: &HashMap<String, RuleGroup>) -> String {
+fn redact_text(input: &str, rules: &[Rule]) -> String {
     let mut out = input.to_string();
 
-    for rule in rules.values() {
+    for rule in rules {
         for m in &rule.match_ {
             out = out.replace(m, &rule.replace);
         }
     }
 
-    return out
+    out
 }
 
 fn load_config(app: &str) -> Config {
-    let base = std::env::var("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            let mut p = PathBuf::from(std::env::var("HOME").unwrap());
-            p.push(".config");
-            p
-        });
+    let path = config_path(app);
 
-    let path = base.join(app).join("config.toml");
-    let data = fs::read_to_string(&path)
-        .expect("missing ~/.config/redactd/config.toml");
+    let data = match fs::read_to_string(&path) {
+        Ok(data) => data,
+        Err(_) => {
+            fs::create_dir_all(path.parent().unwrap()).expect("failed to create config directory");
+            fs::write(&path, DEFAULT_CONFIG).expect("failed to write default config");
+            eprintln!(
+                "created starter config at {}, edit it and rerun",
+                path.display()
+            );
+            exit(1);
+        }
+    };
 
-    toml::from_str(&data).expect("invalid config")
+    match serde_yaml_ng::from_str(&data) {
+        Ok(config) => config,
+        Err(e) => {
+            eprintln!("invalid config {}: {}", path.display(), e);
+            exit(1);
+        }
+    }
 }
