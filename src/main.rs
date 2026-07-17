@@ -14,6 +14,11 @@ rules:
 ";
 
 fn main() {
+    if std::env::args().nth(1).as_deref() == Some("version") {
+        print!("{}", version_info());
+        return;
+    }
+
     let config = load_config("redactd");
     let clipboard = read_clipboard();
 
@@ -21,6 +26,26 @@ fn main() {
     if redacted != clipboard {
         overwrite_clipboard(&redacted);
     }
+}
+
+fn version_info() -> String {
+    format!(
+        "Name:      redactd\n\
+         Version:   {}\n\
+         Revision:  {}\n\
+         Reference: {}\n\
+         Rustc:     {}\n\
+         Built At:  {}\n\
+         OS:        {}\n\
+         Arch:      {}\n",
+        env!("REDACTD_VERSION"),
+        env!("REDACTD_REVISION"),
+        env!("REDACTD_REFERENCE"),
+        env!("REDACTD_RUSTC"),
+        env!("REDACTD_BUILT"),
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+    )
 }
 
 fn read_clipboard() -> String {

@@ -46,6 +46,7 @@ build:
   script:
     - "cargo build --release"
     - "cp target/release/redactd ${OUTPUT}"
+    - "./${OUTPUT} version"
   artifacts:
     paths:
       - "${OUTPUT}"
